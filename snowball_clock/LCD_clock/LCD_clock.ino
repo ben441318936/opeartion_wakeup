@@ -109,7 +109,7 @@ void loop() {
   }
   else if (displayMode == NORMAL_CLOCK_DISPLAY) {
     Time t = rtc.getTime();
-    LCDClockDisplay(Time t);
+    LCDClockDisplay(t);
     if (digitalRead(select) == HIGH) {
       selectPressed = true;
     }
@@ -119,7 +119,7 @@ void loop() {
         displayMode = MENU_DISPLAY;
       }
     }
-    if (checkAlarm(TIme t)) {
+    if (checkAlarm(t)) {
       displayMode = ALARM;
     }
   }
@@ -435,7 +435,10 @@ bool checkAlarm(Time t) {
   return (alarmHr == t.hour && alarmMin == t.min);
 }
 
+void LCDMenuDisplay() {
+  
+}
+
 void displayAlarm() {
 
-  
 }
