@@ -1,18 +1,31 @@
-//#include <Time.h>
-//#include <TimeLib.h>
 #include <LiquidCrystal.h>
 
 #include <DS3231.h>
 
 #define tempIn A0
-#define confirm 8
-#define numUp 9
+#define select 8
+#define change 9
+
+// Operation modes
+#define TIME_NOT_SET 0
+#define NORMAL_CLOCK_DISPLAY 1
+#define MENU_DISPLAY 2
+#define ALARM 3
+
+// Menu modes
+#define ACTIVATE_SELECT 0
+#define HOUR_SELECT 1
+#define MINUTE_SELECT 2
+#define CONFIRM_SCREEN 3
 
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
 // SDA: A4
 // SCL: A5
 DS3231 rtc(SDA, SCL);
+
+// yr, mo, da ... are globals used to initialize the clock and used to keep track of time change
+// yrSet, moSet, daSet ... are globals used during the initialization sequence
 
 int yr = 2017;
 bool yrSet = false;
@@ -28,72 +41,45 @@ int se = 0;
 bool secSet = false;
 bool allSet = false;
 
-bool numUpPressed = false;
-bool confirmPressed = false;
+// Buttons are used as a trigger to avoid lingering press effects
 
-bool time_set = false;
+bool changePressed = false;
+bool selectPressed = false;
+
+// Operation modes
+/* 
+  0: Time not set, initialization
+  1: Time set, normal clock display
+  2: Time set, alarm menu
+*/
+int displayMode = TIME_NOT_SET;
+
+
+// Menu modes
+/* 
+  0: 
+*/
+int menuMode = ACTIVATE_SELECT;
+
+bool alarmOn = false;
+bool alarmOnOffSet = false;
+int alarmHr = 0;
+bool alarmHrSet = false;
+int alarmMin = 0;
+bool alarmMinSet = false;
+bool menuConfirmed = false;
 
 void setup() {
-  pinMode(confirm, INPUT);
-  pinMode(numUp, INPUT);
+  pinMode(select, INPUT);
+  pinMode(change, INPUT);
   //Serial.begin(9600);
   lcd.begin(16, 2);
   rtc.begin();
-
 }
 
 void loop() {
 
-  if (time_set) {
-    /* 
-     * The following logic sequence is replaced 
-     * by the actual code to reduce function call overhead
-     * for time efficiency sincemtime accuracy is critical
-    
-    if (timeChanged()){
-      lcd.clear();
-      LCDClockDisplay();
-    }
-    */
-
-    Time t = rtc.getTime();    
-    if (se != t.sec || mins != t.min || hr != t.hour || da != t.date || mo != t.mon || yr != t.year){
-      // Printing sequence
-      lcd.clear();
-      lcd.setCursor(3, 0);
-      lcd.print(t.date);
-      lcd.print(" ");
-      lcd.print(t.mon);
-      lcd.print(" ");
-      lcd.print(t.year);
-      lcd.setCursor(4, 1);
-      lcd.print(t.hour);
-      // Print minutes with formatting
-      lcd.print(":");
-      if (t.min < 10)
-        lcd.print('0');
-      lcd.print(t.min);
-      // Print seconds with formatting
-      lcd.print(":");
-      if (t.sec < 10)
-        lcd.print('0');
-      lcd.print(t.sec);
-
-      /*
-      if (mins != t.min) {
-        setTime(t.hour, t.min, t.sec, t.date, t.mon, t.year);
-      }
-      */
-
-      yr = t.year;
-      mo = t.mon;
-      da = t.date;
-      hr = t.hour;
-      mins = t.min;
-      se = t.sec;
-    }
-  }
-  else {
+  if (displayMode == TIME_NOT_SET) {
     if (!allSet) {
       if (!yrSet) {
         getYear();
@@ -116,31 +102,89 @@ void loop() {
     }
     allSet = timeSetReady(yrSet, monSet, daSet, hrSet, minsSet, secSet);
     if (allSet) {
-      if (!time_set) {
-        //setTime(hr, mins, se, da, mo, yr);
-        rtc.setDate(da,mo,yr);
-        rtc.setTime(hr,mins,se);
-        time_set = true;
+      rtc.setDate(da,mo,yr);
+      rtc.setTime(hr,mins,se);
+      displayMode = NORMAL_CLOCK_DISPLAY;
+    }
+  }
+  else if (displayMode == NORMAL_CLOCK_DISPLAY) {
+    Time t = rtc.getTime();
+    LCDClockDisplay(Time t);
+    if (digitalRead(select) == HIGH) {
+      selectPressed = true;
+    }
+    else {
+      if (selectPressed == true) {
+        selectPressed = false;
+        displayMode = MENU_DISPLAY;
       }
     }
+    if (checkAlarm(TIme t)) {
+      displayMode = ALARM;
+    }
+  }
+  else if (displayMode == MENU_DISPLAY) {
+    LCDMenuDisplay();
+    if (menuMode == ACTIVATE_SELECT) {
+      getOnOff();
+      if (alarmOnOffSet) {
+        menuMode = HOUR_SELECT;
+        alarmOnOffSet = false;
+      }
+    }
+    else if (menuMode == HOUR_SELECT) {
+      getAlarmHour();
+      if (alarmHrSet) {
+        menuMode = MINUTE_SELECT;
+        alarmHrSet = false;
+      }
+    }
+    else if (menuMode == MINUTE_SELECT) {
+      getAlarmMinute();
+      if (alarmMinSet) {
+        menuMode = ACTIVATE_SELECT;
+        displayMode = NORMAL_CLOCK_DISPLAY;
+      }
+    }
+  }
+  else if (displayMode == ALARM) {
+    displayAlarm();
+    // TODO: add in logic for snooze and turning off
   }
   
   delay(10);
 
 }
 
+// Returns true if all the fields have been initialized
 bool timeSetReady(bool yr, bool mo, bool da, bool hr, bool mins, bool se) {
   return yr && mo && da && hr && mins && se;
 }
 
-/*
-bool timeChanged() {
-  Time t = rtc.getTime();
-  bool result = true;
-  if (se == t.sec && mins == t.min && hr == t.hour && da == t.date && mo == t.mon && yr == t.year){
-    result = false;
-  }
-  else {
+void LCDClockDisplay(Time t) {
+
+  if (se != t.sec || mins != t.min || hr != t.hour || da != t.date || mo != t.mon || yr != t.year){
+    // Printing sequence
+    lcd.clear();
+    lcd.setCursor(3, 0);
+    lcd.print(t.date);
+    lcd.print(" ");
+    lcd.print(t.mon);
+    lcd.print(" ");
+    lcd.print(t.year);
+    lcd.setCursor(4, 1);
+    lcd.print(t.hour);
+    // Print minutes with formatting
+    lcd.print(":");
+    if (t.min < 10)
+      lcd.print('0');
+    lcd.print(t.min);
+    // Print seconds with formatting
+    lcd.print(":");
+    if (t.sec < 10)
+      lcd.print('0');
+    lcd.print(t.sec);
+
     yr = t.year;
     mo = t.mon;
     da = t.date;
@@ -148,60 +192,28 @@ bool timeChanged() {
     mins = t.min;
     se = t.sec;
   }
-  return result;
 }
-*/
-/*
-void LCDClockDisplay() {
-  Time t = rtc.getTime();
-  yr = t.year;
-  mo = t.mon;
-  da = t.date;
-  hr = t.hour;
-  mins = t.min;
-  se = t.sec;
 
-  lcd.clear()
-  lcd.setCursor(3, 0);
-  lcd.print(da);
-  lcd.print(" ");
-  lcd.print(mo);
-  lcd.print(" ");
-  lcd.print(yr);
-  lcd.setCursor(4, 1);
-  lcd.print(hr);
-  LCDprintDigits(lcd, mins);
-  LCDprintDigits(lcd, se);
-}
-*/
-/*
-void LCDprintDigits(LiquidCrystal l , int digits) {
-  // utility function for digital clock display: prints preceding colon and leading 0
-  l.print(":");
-  if (digits < 10)
-    l.print('0');
-  l.print(digits);
-}
-*/
+// Get functions used during the initialization stage and alarm setting
 
 void getYear() {
   lcd.clear();
   lcd.print("Year " + String(yr));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       yr++;
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       yrSet = true;
     }
   }
@@ -210,24 +222,24 @@ void getYear() {
 void getMonth() {
   lcd.clear();
   lcd.print("Month " + String(mo));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       mo++;
       if (mo >= 13) {
         mo = 1;
       }
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       monSet = true;
     }
   }
@@ -236,24 +248,24 @@ void getMonth() {
 void getDay() {
   lcd.clear();
   lcd.print("Day " + String(da));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       da++;
       if (da >= 32) {
         da = 1;
       }
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       daSet = true;
     }
   }
@@ -262,24 +274,24 @@ void getDay() {
 void getHour() {
   lcd.clear();
   lcd.print("Hour " + String(hr));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       hr++;
       if (hr >= 24) {
         hr = 0;
       }
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       hrSet = true;
     }
   }
@@ -288,24 +300,24 @@ void getHour() {
 void getMinute() {
   lcd.clear();
   lcd.print("Minute " + String(mins));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       mins++;
       if (mins >= 60) {
         mins = 0;
       }
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       minsSet = true;
     }
   }
@@ -314,27 +326,116 @@ void getMinute() {
 void getSecond() {
   lcd.clear();
   lcd.print("Second " + String(se));
-  if (digitalRead(numUp) == HIGH) {
-    numUpPressed = true;
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
   }
   else {
-    if (numUpPressed == true) {
-      numUpPressed = false;
+    if (changePressed == true) {
+      changePressed = false;
       se++;
       if (se >= 60) {
         se = 0;
       }
     }
   }
-  if (digitalRead(confirm) == HIGH) {
-    confirmPressed = true;
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
   }
   else {
-    if (confirmPressed == true) {
-      confirmPressed = false;
+    if (selectPressed == true) {
+      selectPressed = false;
       secSet = true;
     }
   }
 }
 
+void getOnOff() {
+  lcd.clear();
+  if (alarmOn) {
+    lcd.print("Alarm: On");
+  }
+  else {
+    lcd.print("Alarm: Off");
+  }
+  
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
+  }
+  else {
+    if (changePressed == true) {
+      changePressed = false;
+      alarmOn = !alarmOn;
+    }
+  }
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
+  }
+  else {
+    if (selectPressed == true) {
+      selectPressed = false;
+      alarmOnOffSet = true;
+    }
+  }
 
+}
+
+void getAlarmHour() {
+  lcd.clear();
+  lcd.print("Hour " + String(alarmHr));
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
+  }
+  else {
+    if (changePressed == true) {
+      changePressed = false;
+      alarmHr++;
+      if (alarmHr >= 24) {
+        alarmHr = 0;
+      }
+    }
+  }
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
+  }
+  else {
+    if (selectPressed == true) {
+      selectPressed = false;
+      alarmHrSet = true;
+    }
+  }
+}
+
+void getAlarmMinute() {
+  lcd.clear();
+  lcd.print("Hour " + String(alarmMin));
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
+  }
+  else {
+    if (changePressed == true) {
+      changePressed = false;
+      alarmMin++;
+      if (alarmMin >= 24) {
+        alarmMin = 0;
+      }
+    }
+  }
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
+  }
+  else {
+    if (selectPressed == true) {
+      selectPressed = false;
+      alarmMinSet = true;
+    }
+  }
+}
+
+bool checkAlarm(Time t) {
+  return (alarmHr == t.hour && alarmMin == t.min);
+}
+
+void displayAlarm() {
+
+  
+}
