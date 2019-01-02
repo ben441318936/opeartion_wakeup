@@ -47,18 +47,9 @@ bool changePressed = false;
 bool selectPressed = false;
 
 // Operation modes
-/* 
-  0: Time not set, initialization
-  1: Time set, normal clock display
-  2: Time set, alarm menu
-*/
 int displayMode = TIME_NOT_SET;
 
-
 // Menu modes
-/* 
-  0: 
-*/
 int menuMode = ACTIVATE_SELECT;
 
 bool alarmOn = false;
@@ -72,9 +63,12 @@ bool menuConfirmed = false;
 void setup() {
   pinMode(select, INPUT);
   pinMode(change, INPUT);
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
   //Serial.begin(9600);
   lcd.begin(16, 2);
   rtc.begin();
+  //Serial.println("Set up complete");
 }
 
 void loop() {
@@ -83,21 +77,27 @@ void loop() {
     if (!allSet) {
       if (!yrSet) {
         getYear();
+        //Serial.println("Getting year");
       }
       else if (!monSet) {
         getMonth();
+        //Serial.println("Getting month");
       }
       else if (!daSet) {
         getDay();
+        //Serial.println("Getting day");
       }
       else if (!hrSet) {
         getHour();
+        //Serial.println("Getting hour");
       }
       else if (!minsSet) {
         getMinute();
+        //Serial.println("Getting minutes");
       }
       else if (!secSet) {
         getSecond();
+        //Serial.println("Getting second");
       }
     }
     allSet = timeSetReady(yrSet, monSet, daSet, hrSet, minsSet, secSet);
@@ -105,11 +105,13 @@ void loop() {
       rtc.setDate(da,mo,yr);
       rtc.setTime(hr,mins,se);
       displayMode = NORMAL_CLOCK_DISPLAY;
+      //Serial.println("Initial ime set");
     }
   }
   else if (displayMode == NORMAL_CLOCK_DISPLAY) {
     Time t = rtc.getTime();
     LCDClockDisplay(t);
+    //Serial.println("Clock display");
     if (digitalRead(select) == HIGH) {
       selectPressed = true;
     }
@@ -119,7 +121,7 @@ void loop() {
         displayMode = MENU_DISPLAY;
       }
     }
-    if (checkAlarm(t)) {
+    if (alarmOn && checkAlarm(t)) {
       displayMode = ALARM;
     }
   }
@@ -128,7 +130,13 @@ void loop() {
     if (menuMode == ACTIVATE_SELECT) {
       getOnOff();
       if (alarmOnOffSet) {
-        menuMode = HOUR_SELECT;
+        if (alarmOn) {
+          menuMode = HOUR_SELECT;
+        }
+        else {
+          menuMode = ACTIVATE_SELECT;
+          displayMode = NORMAL_CLOCK_DISPLAY;
+        }
         alarmOnOffSet = false;
       }
     }
@@ -142,14 +150,26 @@ void loop() {
     else if (menuMode == MINUTE_SELECT) {
       getAlarmMinute();
       if (alarmMinSet) {
+        alarmMinSet = false;
         menuMode = ACTIVATE_SELECT;
         displayMode = NORMAL_CLOCK_DISPLAY;
       }
     }
   }
   else if (displayMode == ALARM) {
-    displayAlarm();
+    Time t = rtc.getTime();
+    displayAlarm(t);
     // TODO: add in logic for snooze and turning off
+    if (digitalRead(select) == HIGH) {
+      selectPressed = true;
+    }
+    else {
+      if (selectPressed == true) {
+        selectPressed = false;
+        displayMode = NORMAL_CLOCK_DISPLAY;
+        digitalWrite(LED_BUILTIN, LOW);
+      }
+    }
   }
   
   delay(10);
@@ -407,7 +427,7 @@ void getAlarmHour() {
 
 void getAlarmMinute() {
   lcd.clear();
-  lcd.print("Hour " + String(alarmMin));
+  lcd.print("Min " + String(alarmMin));
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -415,7 +435,7 @@ void getAlarmMinute() {
     if (changePressed == true) {
       changePressed = false;
       alarmMin++;
-      if (alarmMin >= 24) {
+      if (alarmMin >= 60) {
         alarmMin = 0;
       }
     }
@@ -432,13 +452,35 @@ void getAlarmMinute() {
 }
 
 bool checkAlarm(Time t) {
-  return (alarmHr == t.hour && alarmMin == t.min);
+  return (alarmHr == t.hour && alarmMin == t.min && t.sec == 0);
 }
 
 void LCDMenuDisplay() {
   
 }
 
-void displayAlarm() {
+void displayAlarm(Time t) {
+  digitalWrite(LED_BUILTIN, HIGH);
+  
+  lcd.clear();
+  lcd.print("Alarm!!!");
+  lcd.setCursor(4, 1);
+  lcd.print(t.hour);
+  // Print minutes with formatting
+  lcd.print(":");
+  if (t.min < 10)
+    lcd.print('0');
+  lcd.print(t.min);
+  // Print seconds with formatting
+  lcd.print(":");
+  if (t.sec < 10)
+    lcd.print('0');
+  lcd.print(t.sec);
 
+  yr = t.year;
+  mo = t.mon;
+  da = t.date;
+  hr = t.hour;
+  mins = t.min;
+  se = t.sec;
 }
