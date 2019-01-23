@@ -2,7 +2,8 @@
 
 #include <DS3231.h>
 
-#define tempIn A0
+
+// Pins
 #define select 8
 #define change 9
 
@@ -18,7 +19,9 @@
 #define MINUTE_SELECT 2
 #define CONFIRM_SCREEN 3
 
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+#define SNOOZE_TIME 5
+
+LiquidCrystal lcd(12, 11, 7, 4, 3, 2);
 
 // SDA: A4
 // SCL: A5
@@ -59,6 +62,10 @@ bool alarmHrSet = false;
 int alarmMin = 0;
 bool alarmMinSet = false;
 bool menuConfirmed = false;
+
+bool snoozeOn = false;
+int snoozeHr = 0;
+int snoozeMin = 0;
 
 void setup() {
   pinMode(select, INPUT);
@@ -124,9 +131,11 @@ void loop() {
     if (alarmOn && checkAlarm(t)) {
       displayMode = ALARM;
     }
+    if (snoozeOn && checkSnooze(t)) {
+      displayMode = ALARM;
+    }
   }
   else if (displayMode == MENU_DISPLAY) {
-    LCDMenuDisplay();
     if (menuMode == ACTIVATE_SELECT) {
       getOnOff();
       if (alarmOnOffSet) {
@@ -152,6 +161,8 @@ void loop() {
       if (alarmMinSet) {
         alarmMinSet = false;
         menuMode = ACTIVATE_SELECT;
+        snoozeHr = alarmHr;
+        snoozeMin = alarmMin;
         displayMode = NORMAL_CLOCK_DISPLAY;
       }
     }
@@ -159,20 +170,41 @@ void loop() {
   else if (displayMode == ALARM) {
     Time t = rtc.getTime();
     displayAlarm(t);
-    // TODO: add in logic for snooze and turning off
-    if (digitalRead(select) == HIGH) {
+    // TODO: add in logic for snooze
+    if (digitalRead(change) == HIGH) {
+      changePressed = true;
+    } 
+    else if (changePressed == true) {
+      changePressed = false;
+      snoozeOn = true;
+      snoozeMin = t.min + SNOOZE_TIME;
+      if (snoozeMin >= 60) {
+        snoozeMin = snoozeMin - 60;
+        snoozeHr = t.hour + 1;
+        if (snoozeHr >= 24) {
+          snoozeHr = snoozeHr - 24;
+        }
+      }
+      else {
+        snoozeHr = t.hour;
+      }
+      displayMode = NORMAL_CLOCK_DISPLAY;
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+    else if (digitalRead(select) == HIGH) {
       selectPressed = true;
     }
-    else {
-      if (selectPressed == true) {
-        selectPressed = false;
-        displayMode = NORMAL_CLOCK_DISPLAY;
-        digitalWrite(LED_BUILTIN, LOW);
-      }
+    else if (selectPressed == true) {
+      selectPressed = false;
+      displayMode = NORMAL_CLOCK_DISPLAY;
+      snoozeOn = false;
+      snoozeHr = alarmHr;
+      snoozeMin = alarmMin;
+      digitalWrite(LED_BUILTIN, LOW);
     }
   }
   
-  delay(10);
+  delay(50);
 
 }
 
@@ -455,8 +487,8 @@ bool checkAlarm(Time t) {
   return (alarmHr == t.hour && alarmMin == t.min && t.sec == 0);
 }
 
-void LCDMenuDisplay() {
-  
+bool checkSnooze(Time t) {
+  return (snoozeHr == t.hour && snoozeMin == t.min && t.sec == 0);
 }
 
 void displayAlarm(Time t) {
