@@ -608,7 +608,8 @@ void getAMPM() {
 }
 
 void getAlarmHour() {
-  construct_get_alarm_hr_chars(alarmHr)
+  construct_get_alarm_hr_chars(alarmHr);
+  LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -628,6 +629,55 @@ void getAlarmHour() {
     if (selectPressed == true) {
       selectPressed = false;
       alarmHrSet = true;
+    }
+  }
+}
+
+void getAlarmMinute() {
+  construct_get_alarm_hr_chars(alarmHr);
+  LED_display();
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
+  }
+  else {
+    if (changePressed == true) {
+      changePressed = false;
+      alarmMin++;
+      if (alarmMin >= 60) {
+        alarmMin = 0;
+      }
+    }
+  }
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
+  }
+  else {
+    if (selectPressed == true) {
+      selectPressed = false;
+      alarmMinSet = true;
+    }
+  }
+}
+
+void getAlarmAMPM() {
+  construct_get_alarm_AMPM_chars(alarmAM);
+  LED_display();
+  if (digitalRead(change) == HIGH) {
+    changePressed = true;
+  }
+  else {
+    if (changePressed == true) {
+      changePressed = false;
+      alarmAm = !alarmAm;
+    }
+  }
+  if (digitalRead(select) == HIGH) {
+    selectPressed = true;
+  }
+  else {
+    if (selectPressed == true) {
+      selectPressed = false;
+      alarmAMPMSet = true;
     }
   }
 }
