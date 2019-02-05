@@ -428,7 +428,6 @@ void getOnOff() {
       alarmOnOffSet = true;
     }
   }
-
 }
 
 void getAlarmHour() {
