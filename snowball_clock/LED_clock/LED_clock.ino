@@ -2,8 +2,8 @@
 #include "LedControl.h"
 
 // Pins
-#define select 8
-#define change 9
+#define select 6
+#define change 7
 
 // Operation modes
 #define TIME_NOT_SET 0
@@ -15,9 +15,10 @@
 #define ACTIVATE_SELECT 0
 #define HOUR_SELECT 1
 #define MINUTE_SELECT 2
-#define CONFIRM_SCREEN 3
+#define AMPM_SELECT 3
+#define CONFIRM_SCREEN 4
 
-#define SNOOZE_TIME 5
+#define SNOOZE_TIME 1
 
 // LedControl(DIN,CLK,CS,num_device);
 LedControl lc = LedControl(12,10,11,8);
@@ -54,11 +55,11 @@ int menuMode = ACTIVATE_SELECT;
 
 bool alarmOn = false;
 bool alarmOnOffSet = false;
-int alarmHr = 0;
+int alarmHr = 12;
 bool alarmHrSet = false;
 int alarmMin = 0;
 bool alarmMinSet = false;
-bool alarmAM = false;
+bool alarmAM = true;
 bool alarmAMPMSet = false;
 bool menuConfirmed = false;
 
@@ -300,25 +301,25 @@ const byte CHARS[][8] = {
   B01001010,
   B00111100
 },
-// (((
+// ((
 {
   B00100000,
   B01000100,
-  B10001001,
-  B10010010,
-  B10010010,
-  B10001001,
+  B10001000,
+  B10010000,
+  B10010000,
+  B10001000,
   B01000100,
   B00100000
 },
-// )))
+// ))
 {
   B00000100,
   B00100010,
-  B10010001,
-  B01001001,
-  B01001001,
-  B10010001,
+  B00010001,
+  B00001001,
+  B00001001,
+  B00010001,
   B00100010,
   B00000100
 },
@@ -423,12 +424,55 @@ byte DISPLAY_CHARS[4][8] = {
 }
 };
 
+byte PREV_DISPLAY_CHARS[4][8] = {
+{
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000
+},
+{
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000
+},
+{
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000
+},
+{
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000,
+  B00000000
+}
+};
+
 void setup() {
   pinMode(select, INPUT);
   pinMode(change, INPUT);
   pinMode(LED_BUILTIN,OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  //Serial.begin(9600);
+  Serial.begin(9600);
   
   //we have already set the number of devices when we created the LedControl
   //we have to init all devices in a loop
@@ -443,7 +487,7 @@ void setup() {
   }
 
   rtc.begin();
-  //Serial.println("Set up complete");
+  Serial.println("Set up complete");
 }
 
 void loop() {
@@ -479,7 +523,7 @@ void loop() {
   else if (displayMode == NORMAL_CLOCK_DISPLAY) {
     Time t = rtc.getTime();
     construct_time_chars(t);
-    LED_display();
+    //LED_display();
     //Serial.println("Clock display");
     if (digitalRead(select) == HIGH) {
       selectPressed = true;
@@ -519,12 +563,23 @@ void loop() {
       }
     }
     else if (menuMode == MINUTE_SELECT) {
+      Serial.println("Getting alarm min");
       getAlarmMinute();
       if (alarmMinSet) {
         alarmMinSet = false;
+        menuMode = AMPM_SELECT;
+        Serial.println("Getting alarm min done");
+      }
+    }
+    else if (menuMode == AMPM_SELECT) {
+      getAlarmAMPM();
+      Serial.println("Getting alarm am");
+      if (alarmAMPMSet) {
+        alarmAMPMSet = false;
         menuMode = ACTIVATE_SELECT;
         snoozeHr = alarmHr;
         snoozeMin = alarmMin;
+        snoozeAM = alarmAM;
         displayMode = NORMAL_CLOCK_DISPLAY;
       }
     }
@@ -574,8 +629,9 @@ void loop() {
       digitalWrite(LED_BUILTIN, LOW);
     }
   }
-  
-  delay(50);
+  Serial.println("Starting to display...");
+  LED_display();
+  Serial.println("Finished display.");
 
 }
 
@@ -588,8 +644,10 @@ bool timeSetReady(bool hr, bool mins, bool ampm) {
 // Get functions used during the initialization stage and alarm setting
 
 void getHour() {
+  Serial.println("Starting to construct get hour...");
   construct_get_hr_chars(hr);
-  LED_display();
+  Serial.println("Finished construct get hour.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -614,8 +672,10 @@ void getHour() {
 }
 
 void getMinute() {
-  construct_get_hr_chars(mins);
-  LED_display();
+  Serial.println("Starting to construct get mins...");
+  construct_get_min_chars(mins);
+  Serial.println("Finished construct get mins.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -640,8 +700,10 @@ void getMinute() {
 }
 
 void getAMPM() {
+  Serial.println("Starting to construct get AMPM...");
   construct_get_am_pm_chars(am);
-  LED_display();
+  Serial.println("Finished construct get AMPM.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -663,8 +725,10 @@ void getAMPM() {
 }
 
 void getOnOff() {
+  Serial.println("Starting to construct get on off...");
   construct_get_menu_on_off_chars(alarmOn);
-  LED_display();
+  Serial.println("Finished construct get on off.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -686,8 +750,10 @@ void getOnOff() {
 }
 
 void getAlarmHour() {
+  Serial.println("Starting to construct get alarm hour...");
   construct_get_hr_chars(alarmHr);
-  LED_display();
+  Serial.println("Finished construct get alarm hour.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -696,7 +762,7 @@ void getAlarmHour() {
       changePressed = false;
       alarmHr++;
       if (alarmHr > 12) {
-        alarmHr = 0;
+        alarmHr = 1;
       }
     }
   }
@@ -712,8 +778,10 @@ void getAlarmHour() {
 }
 
 void getAlarmMinute() {
-  construct_get_hr_chars(alarmHr);
-  LED_display();
+  Serial.println("Starting to construct get alarm mins...");
+  construct_get_min_chars(alarmMin);
+  Serial.println("Finished construct get alarm mins.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -733,13 +801,16 @@ void getAlarmMinute() {
     if (selectPressed == true) {
       selectPressed = false;
       alarmMinSet = true;
+      Serial.println("Setting alarm min true");
     }
   }
 }
 
 void getAlarmAMPM() {
+  Serial.println("Starting to construct get alarm AMPM...");
   construct_get_am_pm_chars(alarmAM);
-  LED_display();
+  Serial.println("Finished construct get alarm AMPM.");
+  //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
   }
@@ -786,8 +857,10 @@ bool checkSnooze(Time t) {
 
 void displayAlarm(Time t) {
   digitalWrite(LED_BUILTIN, HIGH);
+  Serial.println("Starting to construct alarm chars...");
   construct_alarm_chars(t);
-  LED_display();
+  Serial.println("Finished construct alarm chats.");
+  //LED_display();
 }
 
 
@@ -853,12 +926,16 @@ void clear_display_chars() {
 }
 
 void LED_display() {
-  for (int device = 0; device < 4; device++){
+  for (int device = 3; device >= 0; device--){
     for (int row = 0; row < 8; row++) {
       for (int col = 0; col < 8; col++) {
         bool b = bitRead(DISPLAY_CHARS[device][row], col);
-        lc.setLed(3-device,row,7-col,b);
+        bool b2 = bitRead(PREV_DISPLAY_CHARS[device][row], col);
+        if (b != b2) {
+          lc.setLed(3-device,row,7-col,b);
+        }
       }
+      PREV_DISPLAY_CHARS[device][row] = DISPLAY_CHARS[device][row];
     }
   }
 }
@@ -870,11 +947,11 @@ void construct_get_hr_chars(int x) {
       DISPLAY_CHARS[0][i] = (CHARS[13][i]) | (CHARS[14][i] >> 6);
       if (first_dig != 0) {
         DISPLAY_CHARS[1][i] = (CHARS[14][i] << 2) | (CHARS[12][i] >> 4) | (CHARS[first_dig][i] >> 6);
-        DISPLAY_CHARS[2][i] = (CHARS[first_dig][i] << 2) | (CHARS[second_dig][i] << 3);
+        DISPLAY_CHARS[2][i] = (CHARS[first_dig][i] << 2) | (CHARS[second_dig][i] >> 3);
       }
       else {
         DISPLAY_CHARS[1][i] = (CHARS[14][i] << 2) | (CHARS[12][i] >> 4) | (CHARS[second_dig][i] >> 6);
-        DISPLAY_CHARS[2][i] = (CHARS[second_dig][i] << 2);
+        DISPLAY_CHARS[2][i] = (CHARS[second_dig][i] << 2);     
       }
       DISPLAY_CHARS[3][i] = B00000000;
   }
@@ -886,8 +963,14 @@ void construct_get_min_chars(int x) {
   for (int i=0; i<8; i++) {
       DISPLAY_CHARS[0][i] = (CHARS[15][i]) | (CHARS[16][i] >> 6);
       DISPLAY_CHARS[1][i] = (CHARS[16][i] << 2) | (CHARS[17][i] >> 4);
-      DISPLAY_CHARS[2][i] = (CHARS[17][i] << 4) | (CHARS[12][i] >> 2) | (CHARS[first_dig][i] >> 4);
-      DISPLAY_CHARS[3][i] = CHARS[second_dig][i] >> 1;
+      if (first_dig != 0) {
+        DISPLAY_CHARS[2][i] = (CHARS[17][i] << 4) | (CHARS[12][i] >> 2) | (CHARS[first_dig][i] >> 4);
+        DISPLAY_CHARS[3][i] = CHARS[second_dig][i] >> 1;
+      }
+      else {
+        DISPLAY_CHARS[2][i] = (CHARS[17][i] << 4) | (CHARS[12][i] >> 2) | (CHARS[second_dig][i] >> 4);
+        DISPLAY_CHARS[3][i] = B00000000;
+      }
   }
 }
 
@@ -914,6 +997,7 @@ void construct_get_menu_on_off_chars(bool on) {
       DISPLAY_CHARS[0][i] = (CHARS[20][i]);
       DISPLAY_CHARS[1][i] = (CHARS[18][i] >> 2);
       DISPLAY_CHARS[2][i] = (CHARS[17][i]);
+      DISPLAY_CHARS[3][i] = B00000000;
     }
   }
   else {
@@ -928,9 +1012,9 @@ void construct_get_menu_on_off_chars(bool on) {
 
 void construct_alarm_chars(Time t) {
   for (int i=0; i<8; i++) {
-    DISPLAY_CHARS[0][i] = (CHARS[20][i]);
-    DISPLAY_CHARS[1][i] = B00000000;
-    DISPLAY_CHARS[2][i] = B00000000;
+    DISPLAY_CHARS[0][i] = (CHARS[21][i]);
+    DISPLAY_CHARS[1][i] = (CHARS[20][i]);
+    DISPLAY_CHARS[2][i] = (CHARS[22][i]);
     DISPLAY_CHARS[3][i] = B00000000;
   }
 }
