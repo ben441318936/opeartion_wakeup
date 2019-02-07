@@ -596,22 +596,48 @@ void loop() {
       snoozeMin = t.min + SNOOZE_TIME;
       if (snoozeMin >= 60) {
         snoozeMin = snoozeMin - 60;
-        snoozeHr = t.hour + 1;
-        if (snoozeHr > 12 && snoozeAM) {
+        if (t.hour == 0) {
           snoozeHr = 1;
+          snoozeAM = true;
         }
-        else if (snoozeHr == 12 && snoozeAM) {
+        else if (t.hour < 11) {
+          snoozeHr = t.hour + 1;
+          snoozeAM = true;
+        }
+        else if (t.hour == 11) {
+          snoozeHr = t.hour + 1;
           snoozeAM = false;
         }
-        else if (snoozeHr > 12 && !snoozeAM) {
+        else if (t.hour == 12) {
           snoozeHr = 1;
+          snoozeAM = false;
         }
-        else if (snoozeHr == 12 && !snoozeAM) {
+        else if (t.hour < 23) {
+          snoozeHr = t.hour - 12 + 1;
+          snoozeAM = false;
+        }
+        else if (t.hour == 23) {
+          snoozeHr = 12;
           snoozeAM = true;
         }
       }
       else {
-        snoozeHr = t.hour;
+        if (t.hour == 0) {
+          snoozeHr = 12;
+          snoozeAM = true;
+        }
+        if (t.hour < 12) {
+          snoozeHr = t.hour;
+          snoozeAM = true;
+        }
+        else if (t.hour == 12) {
+          snoozeHr = t.hour;
+          snoozeAM = false;
+        }
+        else {
+          snoozeHr = t.hour - 12;
+          snoozeAM = false;
+        }
       }
       displayMode = NORMAL_CLOCK_DISPLAY;
       digitalWrite(LED_BUILTIN, LOW);
