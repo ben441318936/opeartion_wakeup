@@ -26,7 +26,7 @@ void loop(){
 	player.quality(1); //only accepts 1 or 0, 1 is for better quality
 	Serial.println("Quality set");
 	Serial.println("Start playing");
-	player.play("3.wav"); //Here you place the name of your player
+	player.play("test3.wav"); //Here you place the name of your player
 
 	delay(70000); //This delay should be at least of the same lenght of your player,
 
