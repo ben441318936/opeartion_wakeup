@@ -1,5 +1,6 @@
 #include <DS3231.h>
 #include "LedControl.h"
+#include <SoftwareSerial.h>
 
 // Pins
 #define select 6
@@ -19,6 +20,8 @@
 #define CONFIRM_SCREEN 4
 
 #define SNOOZE_TIME 1
+
+SoftwareSerial mySerial(2,3); // RX, TX
 
 // LedControl(DIN,CLK,CS,num_device);
 LedControl lc = LedControl(12,10,11,8);
@@ -471,8 +474,7 @@ void setup() {
   pinMode(select, INPUT);
   pinMode(change, INPUT);
   pinMode(LED_BUILTIN,OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  Serial.begin(9600);
+  digitalWrite(LED_BUILTIN, HIGH);
   
   //we have already set the number of devices when we created the LedControl
   //we have to init all devices in a loop
@@ -487,7 +489,12 @@ void setup() {
   }
 
   rtc.begin();
-  Serial.println("Set up complete");
+
+  mySerial.begin(9600);
+  establishContact();
+  digitalWrite(LED_BUILTIN,LOW);
+
+  mySerial.write("ssss"); // standby 
 }
 
 void loop() {
@@ -536,9 +543,11 @@ void loop() {
     }
     if (alarmOn && checkAlarm(t)) {
       displayMode = ALARM;
+      mySerial.write("aaaa"); // activate
     }
     if (snoozeOn && checkSnooze(t)) {
       displayMode = ALARM;
+      mySerial.write("aaaa"); // activate
     }
   }
   else if (displayMode == MENU_DISPLAY) {
@@ -563,17 +572,14 @@ void loop() {
       }
     }
     else if (menuMode == MINUTE_SELECT) {
-      Serial.println("Getting alarm min");
       getAlarmMinute();
       if (alarmMinSet) {
         alarmMinSet = false;
         menuMode = AMPM_SELECT;
-        Serial.println("Getting alarm min done");
       }
     }
     else if (menuMode == AMPM_SELECT) {
       getAlarmAMPM();
-      Serial.println("Getting alarm am");
       if (alarmAMPMSet) {
         alarmAMPMSet = false;
         menuMode = ACTIVATE_SELECT;
@@ -640,6 +646,7 @@ void loop() {
         }
       }
       displayMode = NORMAL_CLOCK_DISPLAY;
+      mySerial.write("ssss");
       digitalWrite(LED_BUILTIN, LOW);
     }
     else if (digitalRead(select) == HIGH) {
@@ -647,6 +654,7 @@ void loop() {
     }
     else if (selectPressed == true) {
       selectPressed = false;
+      mySerial.write("ssss");
       displayMode = NORMAL_CLOCK_DISPLAY;
       snoozeOn = false;
       snoozeHr = alarmHr;
@@ -655,9 +663,7 @@ void loop() {
       digitalWrite(LED_BUILTIN, LOW);
     }
   }
-  Serial.println("Starting to display...");
   LED_display();
-  Serial.println("Finished display.");
 
 }
 
@@ -670,9 +676,7 @@ bool timeSetReady(bool hr, bool mins, bool ampm) {
 // Get functions used during the initialization stage and alarm setting
 
 void getHour() {
-  Serial.println("Starting to construct get hour...");
   construct_get_hr_chars(hr);
-  Serial.println("Finished construct get hour.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -698,9 +702,7 @@ void getHour() {
 }
 
 void getMinute() {
-  Serial.println("Starting to construct get mins...");
   construct_get_min_chars(mins);
-  Serial.println("Finished construct get mins.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -726,9 +728,7 @@ void getMinute() {
 }
 
 void getAMPM() {
-  Serial.println("Starting to construct get AMPM...");
   construct_get_am_pm_chars(am);
-  Serial.println("Finished construct get AMPM.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -751,9 +751,7 @@ void getAMPM() {
 }
 
 void getOnOff() {
-  Serial.println("Starting to construct get on off...");
   construct_get_menu_on_off_chars(alarmOn);
-  Serial.println("Finished construct get on off.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -776,9 +774,7 @@ void getOnOff() {
 }
 
 void getAlarmHour() {
-  Serial.println("Starting to construct get alarm hour...");
   construct_get_hr_chars(alarmHr);
-  Serial.println("Finished construct get alarm hour.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -804,9 +800,7 @@ void getAlarmHour() {
 }
 
 void getAlarmMinute() {
-  Serial.println("Starting to construct get alarm mins...");
   construct_get_min_chars(alarmMin);
-  Serial.println("Finished construct get alarm mins.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -827,15 +821,12 @@ void getAlarmMinute() {
     if (selectPressed == true) {
       selectPressed = false;
       alarmMinSet = true;
-      Serial.println("Setting alarm min true");
     }
   }
 }
 
 void getAlarmAMPM() {
-  Serial.println("Starting to construct get alarm AMPM...");
   construct_get_am_pm_chars(alarmAM);
-  Serial.println("Finished construct get alarm AMPM.");
   //LED_display();
   if (digitalRead(change) == HIGH) {
     changePressed = true;
@@ -883,9 +874,7 @@ bool checkSnooze(Time t) {
 
 void displayAlarm(Time t) {
   digitalWrite(LED_BUILTIN, HIGH);
-  Serial.println("Starting to construct alarm chars...");
   construct_alarm_chars(t);
-  Serial.println("Finished construct alarm chats.");
   //LED_display();
 }
 
@@ -1043,4 +1032,11 @@ void construct_alarm_chars(Time t) {
     DISPLAY_CHARS[2][i] = (CHARS[22][i]);
     DISPLAY_CHARS[3][i] = B00000000;
   }
+}
+
+void establishContact(){
+  while(mySerial.available()<=0){
+    delay(500);
+  }
+  mySerial.write('R');
 }
